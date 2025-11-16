@@ -12,25 +12,54 @@ const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/
                  (navigator.maxTouchPoints > 0) ||
                  (window.innerWidth <= 768);
 
+// Function to detect landscape orientation
+function isLandscape() {
+    return window.innerWidth > window.innerHeight;
+}
+
+// Function to calculate mobile canvas size
+function getMobileCanvasSize() {
+    const isLandscapeMode = isLandscape();
+    if (isLandscapeMode) {
+        // In landscape, controls take less vertical space - use smaller control area
+        // Reserve only 100px at bottom for controls in landscape
+        return {
+            width: window.innerWidth,
+            height: window.innerHeight - 100
+        };
+    } else {
+        // In portrait, reserve 140px at bottom for controls
+        return {
+            width: window.innerWidth,
+            height: window.innerHeight - 140
+        };
+    }
+}
+
 // Set canvas size based on device
 if (isMobile) {
-    // For mobile, use full screen width but leave space for controls at bottom
-    canvas.width = window.innerWidth;
-    // Reserve 140px at bottom for controls
-    canvas.height = window.innerHeight - 140;
+    const size = getMobileCanvasSize();
+    canvas.width = size.width;
+    canvas.height = size.height;
 } else {
     // For desktop, use fixed size
     canvas.width = 800;
     canvas.height = 600;
 }
 
-// Handle resize
-window.addEventListener('resize', () => {
+// Handle resize and orientation change
+function updateCanvasSize() {
     if (isMobile) {
-        canvas.width = window.innerWidth;
-        // Reserve 140px at bottom for controls
-        canvas.height = window.innerHeight - 140;
+        const size = getMobileCanvasSize();
+        canvas.width = size.width;
+        canvas.height = size.height;
     }
+}
+
+window.addEventListener('resize', updateCanvasSize);
+window.addEventListener('orientationchange', () => {
+    // Delay to ensure orientation change is complete
+    setTimeout(updateCanvasSize, 100);
 });
 
 // Prevent default touch behaviors (but allow input field to work)
@@ -1526,40 +1555,63 @@ class Game {
                 this.nameInput = e.target.value.toUpperCase().substring(0, 10);
             });
             
-            // Handle form submission (Enter key)
+            // Handle form submission (Enter key or Done button)
             this.mobileNameInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
-                    if (this.nameInput.trim().length > 0) {
-                        this.playerName = this.nameInput.trim().substring(0, 10);
-                        this.state = 'start';
-                        this.nameInput = '';
-                        this.mobileNameInput.value = '';
-                        this.mobileNameInput.style.display = 'none';
-                        this.mobileNameInput.blur();
-                    }
+                    this.submitName();
                 }
             });
             
-            // On mobile, allow tapping canvas to focus input
-            if (isMobile) {
-                canvas.addEventListener('touchstart', (e) => {
-                    if (this.state === 'nameEntry' && this.mobileNameInput) {
-                        e.preventDefault();
-                        this.mobileNameInput.focus();
-                        // Trigger keyboard on iOS
-                        setTimeout(() => {
-                            this.mobileNameInput.click();
-                        }, 50);
-                    }
-                }, { passive: false });
-            }
+            // iOS Safari requires direct user interaction - make input always visible and tappable
+            // Add click handler to ensure keyboard appears
+            this.mobileNameInput.addEventListener('touchstart', (e) => {
+                // Ensure input gets focus on touch
+                e.stopPropagation();
+            }, { passive: true });
             
-            // Don't hide input on blur - let user continue typing
-            // Input will be hidden when state changes or name is submitted
+            this.mobileNameInput.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.mobileNameInput.focus();
+            });
+            
+            // On mobile, make the entire canvas area clickable to focus input during name entry
+            if (isMobile) {
+                const focusInput = (e) => {
+                    if (this.state === 'nameEntry' && this.mobileNameInput) {
+                        // Only focus if input is visible
+                        if (this.mobileNameInput.style.display !== 'none') {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            // Use setTimeout to ensure it's in the same event loop as user interaction
+                            setTimeout(() => {
+                                this.mobileNameInput.focus();
+                                // Force keyboard on iOS
+                                this.mobileNameInput.click();
+                            }, 0);
+                        }
+                    }
+                };
+                
+                canvas.addEventListener('touchstart', focusInput, { passive: false });
+                canvas.addEventListener('click', focusInput);
+            }
         }
         
         this.init();
+    }
+    
+    submitName() {
+        if (this.nameInput.trim().length > 0) {
+            this.playerName = this.nameInput.trim().substring(0, 10);
+            this.state = 'start';
+            this.nameInput = '';
+            if (this.mobileNameInput) {
+                this.mobileNameInput.value = '';
+                this.mobileNameInput.style.display = 'none';
+                this.mobileNameInput.blur();
+            }
+        }
     }
     
     loadHighScores() {
@@ -1761,15 +1813,13 @@ class Game {
     update(deltaTime) {
         // Handle name entry
         if (this.state === 'nameEntry') {
-            // On mobile, show and focus the input field to trigger keyboard
+            // On mobile, always show the input field (it's visible and tappable)
             if (isMobile && this.mobileNameInput) {
+                // Always show input during name entry
                 if (this.mobileNameInput.style.display === 'none' || this.mobileNameInput.style.display === '') {
                     this.mobileNameInput.style.display = 'block';
-                    // Focus after a short delay to ensure it's visible
-                    setTimeout(() => {
-                        this.mobileNameInput.focus();
-                        this.mobileNameInput.value = this.nameInput;
-                    }, 100);
+                    this.mobileNameInput.value = this.nameInput;
+                    // Don't auto-focus - let user tap to trigger keyboard (iOS requirement)
                 }
                 // Sync the displayed value
                 if (this.mobileNameInput.value.toUpperCase() !== this.nameInput) {
