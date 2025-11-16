@@ -2323,28 +2323,44 @@ class Game {
     }
     
     drawUI() {
+        // Calculate responsive font sizes for mobile
+        const isPortraitMobile = isMobile && !isLandscape();
+        const titleFontSize = isPortraitMobile ? '28px' : '48px';
+        const subtitleFontSize = isPortraitMobile ? '18px' : '24px';
+        const smallFontSize = isPortraitMobile ? '14px' : '18px';
+        const scoreFontSize = isPortraitMobile ? '20px' : '28px';
+        
         // Score and lives with background for readability
-        ctx.font = 'bold 28px Arial';
+        ctx.font = `bold ${scoreFontSize} Arial`;
         const scoreText = `Punkte: ${this.score}`;
         const livesText = `Leben: ${this.lives}`;
         
         // Draw semi-transparent background
+        const scoreBgHeight = isPortraitMobile ? 55 : 70;
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(5, 5, 200, 70);
+        ctx.fillRect(5, 5, 200, scoreBgHeight);
         
         // Draw text with outline for better visibility
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 3;
         ctx.fillStyle = '#FFFFFF';
         
-        ctx.strokeText(scoreText, 15, 35);
-        ctx.fillText(scoreText, 15, 35);
+        const scoreY = isPortraitMobile ? 28 : 35;
+        const livesY = isPortraitMobile ? 48 : 65;
         
-        ctx.strokeText(livesText, 15, 65);
-        ctx.fillText(livesText, 15, 65);
+        ctx.strokeText(scoreText, 15, scoreY);
+        ctx.fillText(scoreText, 15, scoreY);
+        
+        ctx.strokeText(livesText, 15, livesY);
+        ctx.fillText(livesText, 15, livesY);
         
         // Reset line width
         ctx.lineWidth = 1;
+        
+        // Calculate safe area (accounting for controls at bottom)
+        const controlAreaHeight = isPortraitMobile ? 140 : (isLandscape() ? 100 : 140);
+        const safeHeight = canvas.height - controlAreaHeight;
+        const centerY = safeHeight / 2;
         
         // Game state screens
         if (this.state === 'nameEntry') {
@@ -2352,98 +2368,114 @@ class Game {
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
             ctx.fillStyle = '#FFFFFF';
-            ctx.font = '36px Arial';
+            ctx.font = isPortraitMobile ? '24px Arial' : '36px Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('GIB DEINEN NAMEN EIN', canvas.width / 2, canvas.height / 2 - 50);
+            const titleY = isPortraitMobile ? centerY - 60 : canvas.height / 2 - 50;
+            ctx.fillText('GIB DEINEN NAMEN EIN', canvas.width / 2, titleY);
             
-            ctx.font = '32px Arial';
+            ctx.font = isPortraitMobile ? '22px Arial' : '32px Arial';
             const displayName = this.nameInput || '_';
             ctx.fillStyle = '#FFD700';
-            ctx.fillText(displayName, canvas.width / 2, canvas.height / 2);
+            ctx.fillText(displayName, canvas.width / 2, centerY);
             
             ctx.fillStyle = '#FFFFFF';
-            ctx.font = '18px Arial';
-            ctx.fillText('Tippe deinen Namen und drücke ENTER', canvas.width / 2, canvas.height / 2 + 40);
-            ctx.fillText('(Max. 10 Zeichen)', canvas.width / 2, canvas.height / 2 + 65);
+            ctx.font = smallFontSize + ' Arial';
+            const inst1Y = isPortraitMobile ? centerY + 30 : canvas.height / 2 + 40;
+            const inst2Y = isPortraitMobile ? centerY + 50 : canvas.height / 2 + 65;
+            ctx.fillText('Tippe deinen Namen und drücke ENTER', canvas.width / 2, inst1Y);
+            ctx.fillText('(Max. 10 Zeichen)', canvas.width / 2, inst2Y);
             ctx.textAlign = 'left';
         } else if (this.state === 'start') {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
             ctx.fillStyle = '#FFFFFF';
-            ctx.font = '48px Arial';
+            ctx.font = titleFontSize + ' Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('SANTA\'S WINTER ABENTEUER', canvas.width / 2, canvas.height / 2 - 80);
+            const titleY = isPortraitMobile ? centerY - 50 : canvas.height / 2 - 80;
+            ctx.fillText('SANTA\'S WINTER ABENTEUER', canvas.width / 2, titleY);
             
             if (this.playerName) {
-                ctx.font = '24px Arial';
-                ctx.fillText(`Spieler: ${this.playerName}`, canvas.width / 2, canvas.height / 2 - 30);
+                ctx.font = subtitleFontSize + ' Arial';
+                const playerY = isPortraitMobile ? centerY - 10 : canvas.height / 2 - 30;
+                ctx.fillText(`Spieler: ${this.playerName}`, canvas.width / 2, playerY);
             }
             
-            ctx.font = '24px Arial';
-            ctx.fillText('Drücke LEERTASTE oder ENTER zum Starten', canvas.width / 2, canvas.height / 2 + 20);
-            ctx.fillText('Pfeiltasten oder A/D zum Bewegen', canvas.width / 2, canvas.height / 2 + 50);
-            ctx.fillText('LEERTASTE zum Springen', canvas.width / 2, canvas.height / 2 + 80);
+            ctx.font = smallFontSize + ' Arial';
+            const startY1 = isPortraitMobile ? centerY + 20 : canvas.height / 2 + 20;
+            const startY2 = isPortraitMobile ? centerY + 40 : canvas.height / 2 + 50;
+            const startY3 = isPortraitMobile ? centerY + 60 : canvas.height / 2 + 80;
+            ctx.fillText('Drücke LEERTASTE oder ENTER zum Starten', canvas.width / 2, startY1);
+            ctx.fillText('Pfeiltasten oder A/D zum Bewegen', canvas.width / 2, startY2);
+            ctx.fillText('LEERTASTE zum Springen', canvas.width / 2, startY3);
             ctx.textAlign = 'left';
         } else if (this.state === 'gameOver') {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
             ctx.fillStyle = '#FF0000';
-            ctx.font = '48px Arial';
+            ctx.font = titleFontSize + ' Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('SPIEL VORBEI', canvas.width / 2, canvas.height / 2 - 150);
+            const gameOverY = isPortraitMobile ? centerY - 80 : canvas.height / 2 - 150;
+            ctx.fillText('SPIEL VORBEI', canvas.width / 2, gameOverY);
             
             ctx.fillStyle = '#FFFFFF';
-            ctx.font = '24px Arial';
-            ctx.fillText(`${this.playerName ? this.playerName + ' - ' : ''}Endpunktzahl: ${this.score}`, canvas.width / 2, canvas.height / 2 - 100);
+            ctx.font = subtitleFontSize + ' Arial';
+            const scoreY = isPortraitMobile ? centerY - 50 : canvas.height / 2 - 100;
+            ctx.fillText(`${this.playerName ? this.playerName + ' - ' : ''}Endpunktzahl: ${this.score}`, canvas.width / 2, scoreY);
             
             // Display high scores (top 10, but only show what fits on screen)
-            ctx.font = '20px Arial';
-            ctx.fillText('BESTENLISTE', canvas.width / 2, canvas.height / 2 - 60);
-            ctx.font = '16px Arial';
+            ctx.font = smallFontSize + ' Arial';
+            const listTitleY = isPortraitMobile ? centerY - 20 : canvas.height / 2 - 60;
+            ctx.fillText('BESTENLISTE', canvas.width / 2, listTitleY);
+            ctx.font = (isPortraitMobile ? '12px' : '16px') + ' Arial';
             const topScores = this.highScores.slice(0, 10);
-            const startY = canvas.height / 2 - 30;
-            const lineHeight = 20;
-            const maxVisible = Math.min(topScores.length, 8); // Show up to 8 scores to fit on screen
+            const startY = isPortraitMobile ? centerY : canvas.height / 2 - 30;
+            const lineHeight = isPortraitMobile ? 16 : 20;
+            const maxVisible = isPortraitMobile ? Math.min(topScores.length, 5) : Math.min(topScores.length, 8);
             
             for (let i = 0; i < maxVisible; i++) {
                 const hs = topScores[i];
                 ctx.fillText(`${i + 1}. ${hs.name}: ${hs.score}`, canvas.width / 2, startY + i * lineHeight);
             }
             
-            ctx.font = '20px Arial';
-            ctx.fillText('Drücke LEERTASTE oder ENTER zum Neustart', canvas.width / 2, canvas.height / 2 + 130);
+            ctx.font = smallFontSize + ' Arial';
+            const restartY = isPortraitMobile ? centerY + 90 : canvas.height / 2 + 130;
+            ctx.fillText('Drücke LEERTASTE oder ENTER zum Neustart', canvas.width / 2, restartY);
             ctx.textAlign = 'left';
         } else if (this.state === 'victory') {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
             ctx.fillStyle = '#00FF00';
-            ctx.font = '48px Arial';
+            ctx.font = titleFontSize + ' Arial';
             ctx.textAlign = 'center';
-            ctx.fillText('DU HAST GEWONNEN!', canvas.width / 2, canvas.height / 2 - 150);
+            const victoryY = isPortraitMobile ? centerY - 80 : canvas.height / 2 - 150;
+            ctx.fillText('DU HAST GEWONNEN!', canvas.width / 2, victoryY);
             
             ctx.fillStyle = '#FFFFFF';
-            ctx.font = '24px Arial';
-            ctx.fillText(`${this.playerName ? this.playerName + ' - ' : ''}Endpunktzahl: ${this.score}`, canvas.width / 2, canvas.height / 2 - 100);
+            ctx.font = subtitleFontSize + ' Arial';
+            const scoreY = isPortraitMobile ? centerY - 50 : canvas.height / 2 - 100;
+            ctx.fillText(`${this.playerName ? this.playerName + ' - ' : ''}Endpunktzahl: ${this.score}`, canvas.width / 2, scoreY);
             
             // Display high scores (top 10, but only show what fits on screen)
-            ctx.font = '20px Arial';
-            ctx.fillText('BESTENLISTE', canvas.width / 2, canvas.height / 2 - 60);
-            ctx.font = '16px Arial';
+            ctx.font = smallFontSize + ' Arial';
+            const listTitleY = isPortraitMobile ? centerY - 20 : canvas.height / 2 - 60;
+            ctx.fillText('BESTENLISTE', canvas.width / 2, listTitleY);
+            ctx.font = (isPortraitMobile ? '12px' : '16px') + ' Arial';
             const topScores = this.highScores.slice(0, 10);
-            const startY = canvas.height / 2 - 30;
-            const lineHeight = 20;
-            const maxVisible = Math.min(topScores.length, 8); // Show up to 8 scores to fit on screen
+            const startY = isPortraitMobile ? centerY : canvas.height / 2 - 30;
+            const lineHeight = isPortraitMobile ? 16 : 20;
+            const maxVisible = isPortraitMobile ? Math.min(topScores.length, 5) : Math.min(topScores.length, 8);
             
             for (let i = 0; i < maxVisible; i++) {
                 const hs = topScores[i];
                 ctx.fillText(`${i + 1}. ${hs.name}: ${hs.score}`, canvas.width / 2, startY + i * lineHeight);
             }
             
-            ctx.font = '20px Arial';
-            ctx.fillText('Drücke LEERTASTE oder ENTER zum erneuten Spielen', canvas.width / 2, canvas.height / 2 + 130);
+            ctx.font = smallFontSize + ' Arial';
+            const restartY = isPortraitMobile ? centerY + 90 : canvas.height / 2 + 130;
+            ctx.fillText('Drücke LEERTASTE oder ENTER zum erneuten Spielen', canvas.width / 2, restartY);
             ctx.textAlign = 'left';
         }
     }

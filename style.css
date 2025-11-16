@@ -40,9 +40,10 @@ body {
     width: 100vw;
     height: 100vh;
     pointer-events: none;
-    z-index: 10000;
     overflow: visible;
     display: none; /* Hidden by default, shown by JavaScript on mobile */
+    /* Ensure controls are above browser UI but below game UI overlays */
+    z-index: 9999;
 }
 
 .control-btn {
@@ -128,6 +129,8 @@ body {
         position: absolute;
         top: 0;
         left: 0;
+        /* Ensure canvas doesn't overlap with controls */
+        z-index: 1;
     }
     
     body {
@@ -136,6 +139,8 @@ body {
         position: fixed;
         width: 100vw;
         height: 100vh;
+        /* Prevent body from scrolling */
+        touch-action: none;
     }
     
     .control-btn {
@@ -157,11 +162,15 @@ body {
     }
     
     #dpad {
+        /* Position controls at bottom, above browser UI */
         bottom: 0;
         left: 0;
         height: 140px;
         padding: 30px;
         padding-left: 20px;
+        /* Ensure controls are above canvas but below overlays */
+        z-index: 10000;
+        pointer-events: auto;
     }
     
     .dpad-btn {
@@ -173,11 +182,13 @@ body {
     #btnLeft {
         bottom: 30px;
         left: 20px;
+        z-index: 10001;
     }
     
     #btnRight {
         bottom: 30px;
         left: 135px; /* 20px (left padding) + 100px (button width) + 15px (gap) */
+        z-index: 10001;
     }
     
     #btnJump.jump-btn {
@@ -186,6 +197,7 @@ body {
         font-size: 48px;
         bottom: 10px;
         right: 20px;
+        z-index: 10001;
     }
 }
 
