@@ -33,20 +33,32 @@ window.addEventListener('resize', () => {
     }
 });
 
-// Prevent default touch behaviors
+// Prevent default touch behaviors (but allow input field to work)
 document.addEventListener('touchstart', (e) => {
+    // Don't prevent default for input fields
+    if (e.target.tagName === 'INPUT' || e.target.id === 'mobileNameInput') {
+        return;
+    }
     if (e.target === canvas || e.target.closest('#virtualControls')) {
         e.preventDefault();
     }
 }, { passive: false });
 
 document.addEventListener('touchmove', (e) => {
+    // Don't prevent default for input fields
+    if (e.target.tagName === 'INPUT' || e.target.id === 'mobileNameInput') {
+        return;
+    }
     if (e.target === canvas || e.target.closest('#virtualControls')) {
         e.preventDefault();
     }
 }, { passive: false });
 
 document.addEventListener('touchend', (e) => {
+    // Don't prevent default for input fields
+    if (e.target.tagName === 'INPUT' || e.target.id === 'mobileNameInput') {
+        return;
+    }
     if (e.target === canvas || e.target.closest('#virtualControls')) {
         e.preventDefault();
     }
@@ -1506,6 +1518,47 @@ class Game {
         this.nameInput = '';
         this.highScores = this.loadHighScores();
         
+        // Mobile name input element
+        this.mobileNameInput = document.getElementById('mobileNameInput');
+        if (this.mobileNameInput) {
+            // Sync input value with game's nameInput
+            this.mobileNameInput.addEventListener('input', (e) => {
+                this.nameInput = e.target.value.toUpperCase().substring(0, 10);
+            });
+            
+            // Handle form submission (Enter key)
+            this.mobileNameInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    if (this.nameInput.trim().length > 0) {
+                        this.playerName = this.nameInput.trim().substring(0, 10);
+                        this.state = 'start';
+                        this.nameInput = '';
+                        this.mobileNameInput.value = '';
+                        this.mobileNameInput.style.display = 'none';
+                        this.mobileNameInput.blur();
+                    }
+                }
+            });
+            
+            // On mobile, allow tapping canvas to focus input
+            if (isMobile) {
+                canvas.addEventListener('touchstart', (e) => {
+                    if (this.state === 'nameEntry' && this.mobileNameInput) {
+                        e.preventDefault();
+                        this.mobileNameInput.focus();
+                        // Trigger keyboard on iOS
+                        setTimeout(() => {
+                            this.mobileNameInput.click();
+                        }, 50);
+                    }
+                }, { passive: false });
+            }
+            
+            // Don't hide input on blur - let user continue typing
+            // Input will be hidden when state changes or name is submitted
+        }
+        
         this.init();
     }
     
@@ -1708,38 +1761,63 @@ class Game {
     update(deltaTime) {
         // Handle name entry
         if (this.state === 'nameEntry') {
-            // Handle keyboard input for name
-            let keyPressed = false;
-            for (const key in this.input.keys) {
-                if (this.input.keys[key]) {
-                    keyPressed = true;
-                    if (key.length === 1 && key.match(/[a-zA-Z0-9]/) && this.nameInput.length < 10) {
-                        if (!this.input.keyProcessed) {
-                            this.nameInput += key.toUpperCase();
-                            this.input.keyProcessed = true;
-                        }
-                    } else if (key === 'backspace') {
-                        if (!this.input.keyProcessed) {
-                            this.nameInput = this.nameInput.slice(0, -1);
-                            this.input.keyProcessed = true;
-                        }
-                    } else if (key === 'enter' || key === ' ') {
-                        if (!this.input.keyProcessed) {
-                            if (this.nameInput.trim().length > 0) {
-                                this.playerName = this.nameInput.trim().substring(0, 10); // Max 10 chars
-                                this.state = 'start';
-                                this.nameInput = '';
+            // On mobile, show and focus the input field to trigger keyboard
+            if (isMobile && this.mobileNameInput) {
+                if (this.mobileNameInput.style.display === 'none' || this.mobileNameInput.style.display === '') {
+                    this.mobileNameInput.style.display = 'block';
+                    // Focus after a short delay to ensure it's visible
+                    setTimeout(() => {
+                        this.mobileNameInput.focus();
+                        this.mobileNameInput.value = this.nameInput;
+                    }, 100);
+                }
+                // Sync the displayed value
+                if (this.mobileNameInput.value.toUpperCase() !== this.nameInput) {
+                    this.mobileNameInput.value = this.nameInput;
+                }
+            } else {
+                // Desktop: Handle keyboard input for name
+                let keyPressed = false;
+                for (const key in this.input.keys) {
+                    if (this.input.keys[key]) {
+                        keyPressed = true;
+                        if (key.length === 1 && key.match(/[a-zA-Z0-9]/) && this.nameInput.length < 10) {
+                            if (!this.input.keyProcessed) {
+                                this.nameInput += key.toUpperCase();
+                                this.input.keyProcessed = true;
                             }
-                            this.input.keyProcessed = true;
+                        } else if (key === 'backspace') {
+                            if (!this.input.keyProcessed) {
+                                this.nameInput = this.nameInput.slice(0, -1);
+                                this.input.keyProcessed = true;
+                            }
+                        } else if (key === 'enter' || key === ' ') {
+                            if (!this.input.keyProcessed) {
+                                if (this.nameInput.trim().length > 0) {
+                                    this.playerName = this.nameInput.trim().substring(0, 10); // Max 10 chars
+                                    this.state = 'start';
+                                    this.nameInput = '';
+                                    if (this.mobileNameInput) {
+                                        this.mobileNameInput.style.display = 'none';
+                                    }
+                                }
+                                this.input.keyProcessed = true;
+                            }
                         }
                     }
                 }
-            }
-            // Reset key processed flag when all keys are released
-            if (!keyPressed) {
-                this.input.keyProcessed = false;
+                // Reset key processed flag when all keys are released
+                if (!keyPressed) {
+                    this.input.keyProcessed = false;
+                }
             }
             return;
+        } else {
+            // Hide mobile input when not in nameEntry state
+            if (this.mobileNameInput && this.mobileNameInput.style.display !== 'none') {
+                this.mobileNameInput.style.display = 'none';
+                this.mobileNameInput.blur();
+            }
         }
         
         if (this.state === 'start' || this.state === 'gameOver' || this.state === 'victory') {
