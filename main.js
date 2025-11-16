@@ -1546,6 +1546,7 @@ class Game {
         this.playerName = '';
         this.nameInput = '';
         this.highScores = this.loadHighScores();
+        this.nameInputAutoFocused = false; // Track if we've attempted auto-focus
         
         // Mobile name input element
         this.mobileNameInput = document.getElementById('mobileNameInput');
@@ -1606,6 +1607,7 @@ class Game {
             this.playerName = this.nameInput.trim().substring(0, 10);
             this.state = 'start';
             this.nameInput = '';
+            this.nameInputAutoFocused = false; // Reset for next time
             if (this.mobileNameInput) {
                 this.mobileNameInput.value = '';
                 this.mobileNameInput.style.display = 'none';
@@ -1819,7 +1821,28 @@ class Game {
                 if (this.mobileNameInput.style.display === 'none' || this.mobileNameInput.style.display === '') {
                     this.mobileNameInput.style.display = 'block';
                     this.mobileNameInput.value = this.nameInput;
-                    // Don't auto-focus - let user tap to trigger keyboard (iOS requirement)
+                    
+                    // Try to auto-focus the input to trigger keyboard immediately
+                    // iOS may block this, but we try multiple approaches
+                    if (!this.nameInputAutoFocused) {
+                        this.nameInputAutoFocused = true;
+                        
+                        // Multiple attempts with different timing to maximize success
+                        setTimeout(() => {
+                            this.mobileNameInput.focus();
+                            // Try click() as well to trigger keyboard on some devices
+                            setTimeout(() => {
+                                this.mobileNameInput.click();
+                            }, 50);
+                        }, 100);
+                        
+                        // Another attempt after a longer delay (in case page is still loading)
+                        setTimeout(() => {
+                            if (this.state === 'nameEntry' && document.activeElement !== this.mobileNameInput) {
+                                this.mobileNameInput.focus();
+                            }
+                        }, 300);
+                    }
                 }
                 // Sync the displayed value
                 if (this.mobileNameInput.value.toUpperCase() !== this.nameInput) {
@@ -2120,6 +2143,7 @@ class Game {
         this.state = 'playing';
         this.score = 0;
         this.lives = 3;
+        this.nameInputAutoFocused = false; // Reset auto-focus flag
         this.player = new Player(100, canvas.height - 80);
         this.camera = new Camera();
         
