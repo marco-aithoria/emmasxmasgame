@@ -296,7 +296,7 @@ class Camera {
         this.y = 0;
         this.targetX = 0;
         this.smoothness = 0.1;
-        this.autoScrollSpeed = 0.1; // Pixels per frame for auto-scrolling
+        this.autoScrollSpeed = 0.08; // Pixels per frame for auto-scrolling (reduced from 0.1)
     }
     
     update(deltaTime, playerX = null, playerY = null, levelLength = 6000, playerMovingRight = false) {
@@ -546,6 +546,77 @@ class House {
             ctx.arc(p.x - camera.x, p.y - camera.y, p.size, 0, Math.PI * 2);
             ctx.fill();
         }
+    }
+}
+
+// ============================================
+// SNOWBALL
+// ============================================
+class Snowball {
+    constructor(x, y) {
+        this.x = x;
+        this.y = y;
+        this.radius = 25; // Large snowball
+        this.velocityY = 0.3; // Falling speed
+        this.rotation = 0;
+        this.rotationSpeed = 0.05;
+    }
+    
+    update(deltaTime) {
+        // Fall downward
+        this.y += this.velocityY * deltaTime;
+        
+        // Rotate while falling
+        this.rotation += this.rotationSpeed * deltaTime;
+    }
+    
+    draw(ctx, camera) {
+        const screenX = this.x - camera.x;
+        const screenY = this.y - camera.y;
+        
+        // Only draw if on screen
+        if (screenX + this.radius < 0 || screenX - this.radius > canvas.width ||
+            screenY + this.radius < 0 || screenY - this.radius > canvas.height) {
+            return;
+        }
+        
+        ctx.save();
+        ctx.translate(screenX, screenY);
+        ctx.rotate(this.rotation);
+        
+        // Main snowball (white circle)
+        ctx.fillStyle = '#FFFFFF';
+        ctx.beginPath();
+        ctx.arc(0, 0, this.radius, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Shadow/highlight for 3D effect
+        ctx.fillStyle = '#E0E0E0';
+        ctx.beginPath();
+        ctx.arc(-this.radius * 0.3, -this.radius * 0.3, this.radius * 0.6, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Darker shadow on bottom
+        ctx.fillStyle = '#D0D0D0';
+        ctx.beginPath();
+        ctx.arc(this.radius * 0.2, this.radius * 0.4, this.radius * 0.5, 0, Math.PI * 2);
+        ctx.fill();
+        
+        // Outline
+        ctx.strokeStyle = '#CCCCCC';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+        
+        ctx.restore();
+    }
+    
+    getBounds() {
+        return {
+            x: this.x - this.radius,
+            y: this.y - this.radius,
+            width: this.radius * 2,
+            height: this.radius * 2
+        };
     }
 }
 
@@ -814,7 +885,7 @@ class Enemy {
         this.y = y;
         this.width = 30;
         this.height = 50;
-        this.speed = 0.03;
+        this.speed = 0.025; // Slower enemy movement (reduced from 0.03)
         this.direction = Math.random() > 0.5 ? 1 : -1;
         this.patrolDistance = 100;
         this.startX = x;
@@ -1031,9 +1102,9 @@ class Player {
         this.height = 40;
         this.velocityX = 0;
         this.velocityY = 0;
-        this.speed = 0.35; // Slower horizontal movement speed
-        this.jumpForce = 50; // pixels per frame (negative Y is up) - high jump
-        this.gravity = 0.15; // Very low gravity for slow fall and much longer air time
+        this.speed = 0.224; // 20% slower horizontal movement (0.28 * 0.8)
+        this.jumpForce = 33.75; // 25% less jump height (45 * 0.75)
+        this.gravity = 0.09; // Reduced gravity for slower fall and longer air time
         this.friction = 0.8;
         this.onGround = true; // Start on ground
         this.wasOnGround = true; // Track previous frame ground state
@@ -1063,6 +1134,9 @@ class Player {
         this.houseEntryTimer = 0;
         this.houseExitTimer = 0;
         this.currentHouse = null;
+        
+        // Platform fall-through state
+        this.fallThroughPlatform = false;
     }
     
     update(deltaTime, input, platforms, houses = [], camera = null, particleSystem = null, goalX = null) {
@@ -1187,42 +1261,51 @@ class Player {
             // If goal is nearby, allow free movement to reach it
         }
         
+        // Check if down key is pressed to fall through platforms
+        this.fallThroughPlatform = input.isPressed('s') || input.isPressed('arrowdown');
+        
         // Check if player is on ground BEFORE processing jump
         this.onGround = false;
-        for (const platform of platforms) {
-            const bounds = platform.getBounds();
-            
-            // Check if player is horizontally overlapping with platform
-            if (this.x < bounds.x + bounds.width &&
-                this.x + this.width > bounds.x) {
+        
+        // Only check platform collision if NOT trying to fall through
+        if (!this.fallThroughPlatform) {
+            for (const platform of platforms) {
+                const bounds = platform.getBounds();
                 
-                const playerBottom = this.y + this.height;
-                const platformTop = bounds.y;
-                const tolerance = 20; // Increased tolerance for more reliable ground detection
-                
-                // Check if player is standing on top of platform or very close
-                if (playerBottom >= platformTop - tolerance && playerBottom <= platformTop + tolerance) {
-                    // Snap player to platform top
-                    this.y = bounds.y - this.height;
-                    // Reset vertical velocity if falling or standing
-                    if (this.velocityY >= 0) {
-                        this.velocityY = 0;
-                    }
+                // Check if player is horizontally overlapping with platform
+                if (this.x < bounds.x + bounds.width &&
+                    this.x + this.width > bounds.x) {
                     
-                    // Check if player just landed (wasn't on ground before, now is)
-                    if (!this.wasOnGround && this.onGround === false && this.particleSystem) {
-                        // Create landing particles
-                        const landingX = this.x + this.width / 2;
-                        const landingY = this.y + this.height;
-                        this.particleSystem.createLandingParticles(landingX, landingY);
+                    const playerBottom = this.y + this.height;
+                    const platformTop = bounds.y;
+                    const tolerance = 20; // Increased tolerance for more reliable ground detection
+                    
+                    // Check if player is standing on top of platform or very close
+                    if (playerBottom >= platformTop - tolerance && 
+                        playerBottom <= platformTop + tolerance) {
+                        // Snap player to platform top
+                        this.y = bounds.y - this.height;
+                        // Reset vertical velocity if falling or standing
+                        if (this.velocityY >= 0) {
+                            this.velocityY = 0;
+                        }
                         
-                        // Landing squash animation
-                        this.squashStretchX = 1.3;
-                        this.squashStretchY = 0.7;
-                        this.squashTimer = 100;
+                        // Check if player just landed (wasn't on ground before, now is)
+                        if (!this.wasOnGround && this.onGround === false && this.particleSystem) {
+                            // Create landing particles
+                            const landingX = this.x + this.width / 2;
+                            const landingY = this.y + this.height;
+                            this.particleSystem.createLandingParticles(landingX, landingY);
+                            
+                            // Landing squash animation
+                            this.squashStretchX = 1.3;
+                            this.squashStretchY = 0.7;
+                            this.squashTimer = 100;
+                        }
+                        
+                        this.onGround = true;
+                        break; // Only stand on one platform
                     }
-                    
-                    this.onGround = true;
                 }
             }
         }
@@ -1260,24 +1343,27 @@ class Player {
         this.y += this.velocityY;
         
         // Check for platform collision immediately after vertical movement
-        for (const platform of platforms) {
-            const bounds = platform.getBounds();
-            
-            // Check if player overlaps horizontally with platform
-            if (this.x < bounds.x + bounds.width &&
-                this.x + this.width > bounds.x) {
+        // Skip collision if player wants to fall through (down key pressed)
+        if (!this.fallThroughPlatform) {
+            for (const platform of platforms) {
+                const bounds = platform.getBounds();
                 
-                const playerBottom = this.y + this.height;
-                const platformTop = bounds.y;
-                const tolerance = 25; // Increased tolerance for more reliable landing
-                
-                // If falling and about to land on platform
-                if (this.velocityY >= 0 && playerBottom >= platformTop - tolerance && playerBottom <= platformTop + tolerance) {
-                    // Land on platform - snap to top
-                    this.y = bounds.y - this.height;
-                    this.velocityY = 0;
-                    this.onGround = true;
-                    break; // Only land on one platform
+                // Check if player overlaps horizontally with platform
+                if (this.x < bounds.x + bounds.width &&
+                    this.x + this.width > bounds.x) {
+                    
+                    const playerBottom = this.y + this.height;
+                    const platformTop = bounds.y;
+                    const tolerance = 25; // Increased tolerance for more reliable landing
+                    
+                    // If falling and about to land on platform
+                    if (this.velocityY >= 0 && playerBottom >= platformTop - tolerance && playerBottom <= platformTop + tolerance) {
+                        // Land on platform - snap to top
+                        this.y = bounds.y - this.height;
+                        this.velocityY = 0;
+                        this.onGround = true;
+                        break; // Only land on one platform
+                    }
                 }
             }
         }
@@ -1309,11 +1395,9 @@ class Player {
         for (const platform of platforms) {
             const bounds = platform.getBounds();
             
-            // Check if player overlaps with platform
+            // Check if player overlaps horizontally with platform
             if (this.x < bounds.x + bounds.width &&
-                this.x + this.width > bounds.x &&
-                this.y < bounds.y + bounds.height &&
-                this.y + this.height > bounds.y) {
+                this.x + this.width > bounds.x) {
                 
                 const playerBottom = this.y + this.height;
                 const playerTop = this.y;
@@ -1321,45 +1405,48 @@ class Player {
                 const platformBottom = bounds.y + bounds.height;
                 const tolerance = 20; // Increased tolerance for more reliable landing
                 
-                // Determine collision type based on player position relative to platform
-                const playerCenterY = this.y + this.height / 2;
-                const platformCenterY = bounds.y + bounds.height / 2;
+                // IMPORTANT: Allow player to jump completely through platforms from below
+                // Only check collision when falling down (velocityY >= 0)
+                // Skip all collision checks when moving upward (velocityY < 0) OR when falling through (down key)
+                if (this.velocityY < 0 || this.fallThroughPlatform) {
+                    // Player is moving upward OR wants to fall through - allow to pass completely through platform
+                    // No collision detection at all when jumping upward or falling through
+                    continue;
+                }
                 
-                // Check if hitting platform from below (jumping upward)
-                if (this.velocityY < 0 && playerTop < platformBottom && playerBottom > platformTop && playerCenterY < platformCenterY) {
-                    // Player is moving upward and hitting platform from below - prevent jumping through
-                    this.y = platformBottom;
-                    this.velocityY = 0;
-                    this.onGround = false;
-                }
-                // Landing on top (falling down onto platform)
-                else if (this.velocityY >= 0 && playerBottom >= platformTop - tolerance && playerBottom <= platformTop + tolerance) {
-                    // Land on platform
-                    const wasFalling = this.velocityY > 1; // Check before resetting velocity
-                    this.y = bounds.y - this.height;
-                    this.velocityY = 0;
-                    this.onGround = true;
-                    if (wasFalling) { // Landing from jump
-                        this.squashStretchX = 0.9;
-                        this.squashStretchY = 1.1;
-                        setTimeout(() => {
-                            this.squashStretchX = 1;
-                            this.squashStretchY = 1;
-                        }, 100);
+                // Now check if player overlaps vertically (only when falling or stationary)
+                if (this.y < bounds.y + bounds.height &&
+                    this.y + this.height > bounds.y) {
+                    
+                    // Landing on top (falling down onto platform)
+                    if (this.velocityY >= 0 && playerBottom >= platformTop - tolerance && playerBottom <= platformTop + tolerance) {
+                        // Land on platform
+                        const wasFalling = this.velocityY > 1; // Check before resetting velocity
+                        this.y = bounds.y - this.height;
+                        this.velocityY = 0;
+                        this.onGround = true;
+                        if (wasFalling) { // Landing from jump
+                            this.squashStretchX = 0.9;
+                            this.squashStretchY = 1.1;
+                            setTimeout(() => {
+                                this.squashStretchX = 1;
+                                this.squashStretchY = 1;
+                            }, 100);
+                        }
+                        break; // Only process one platform collision
                     }
-                    break; // Only process one platform collision
-                }
-                // Side collisions (only if not already handled above)
-                else if (playerTop < platformBottom && playerBottom > platformTop) {
-                    // Hitting from the side
-                    if (this.velocityX > 0 && this.x + this.width > bounds.x && this.x < bounds.x) {
-                        // Hitting from left side
-                        this.x = bounds.x - this.width;
-                        this.velocityX = 0;
-                    } else if (this.velocityX < 0 && this.x < bounds.x + bounds.width && this.x + this.width > bounds.x + bounds.width) {
-                        // Hitting from right side
-                        this.x = bounds.x + bounds.width;
-                        this.velocityX = 0;
+                    // Side collisions (only when falling or stationary, not when jumping upward)
+                    else if (this.velocityY >= 0 && playerTop < platformBottom && playerBottom > platformTop) {
+                        // Hitting from the side (only when falling, not when jumping up)
+                        if (this.velocityX > 0 && this.x + this.width > bounds.x && this.x < bounds.x) {
+                            // Hitting from left side
+                            this.x = bounds.x - this.width;
+                            this.velocityX = 0;
+                        } else if (this.velocityX < 0 && this.x < bounds.x + bounds.width && this.x + this.width > bounds.x + bounds.width) {
+                            // Hitting from right side
+                            this.x = bounds.x + bounds.width;
+                            this.velocityX = 0;
+                        }
                     }
                 }
             }
@@ -1537,12 +1624,15 @@ class Game {
         this.collectibles = [];
         this.houses = [];
         this.snowflakes = [];
+        this.snowballs = []; // Falling snowballs
         this.parallaxLayers = [];
         this.particleSystem = new ParticleSystem();
         this.score = 0;
         this.lives = 3;
         this.lastTime = 0;
         this.goalX = 2000;
+        this.snowballTimer = 0; // Timer for spawning snowballs
+        this.nextSnowballTime = 3000 + Math.random() * 2000; // Random time between 3-5 seconds (in milliseconds)
         this.playerName = '';
         this.nameInput = '';
         this.highScores = this.loadHighScores();
@@ -1553,7 +1643,7 @@ class Game {
         if (this.mobileNameInput) {
             // Sync input value with game's nameInput
             this.mobileNameInput.addEventListener('input', (e) => {
-                this.nameInput = e.target.value.toUpperCase().substring(0, 10);
+                this.nameInput = e.target.value.toUpperCase().substring(0, 20);
             });
             
             // Handle form submission (Enter key or Done button)
@@ -1604,7 +1694,7 @@ class Game {
     
     submitName() {
         if (this.nameInput.trim().length > 0) {
-            this.playerName = this.nameInput.trim().substring(0, 10);
+            this.playerName = this.nameInput.trim().substring(0, 20);
             this.state = 'start';
             this.nameInput = '';
             this.nameInputAutoFocused = false; // Reset for next time
@@ -1653,6 +1743,9 @@ class Game {
         this.houses = [];
         this.parallaxLayers = [];
         this.snowflakes = [];
+        this.snowballs = []; // Clear snowballs
+        this.snowballTimer = 0; // Reset timer
+        this.nextSnowballTime = 3000 + Math.random() * 2000; // Reset next spawn time (3-5 seconds)
         
         // Create parallax layers
         this.parallaxLayers.push(new ParallaxLayer(0, 'sky'));
@@ -1822,6 +1915,21 @@ class Game {
                     this.mobileNameInput.style.display = 'block';
                     this.mobileNameInput.value = this.nameInput;
                     
+                    // Position input field below "Wie heißt du?" and instructions
+                    const isPortraitMobile = isMobile && !isLandscape();
+                    const controlAreaHeight = isPortraitMobile ? 140 : 100;
+                    const safeHeight = canvas.height - controlAreaHeight;
+                    const centerY = safeHeight / 2;
+                    // Calculate instruction text positions (matching drawUI)
+                    const inst2Y = isPortraitMobile ? centerY + 50 : canvas.height / 2 + 65;
+                    // Position input box below the last instruction line with adequate spacing
+                    // Input box height is approximately 60-70px, so center it below inst2Y with spacing
+                    const spacingAfterInstructions = isPortraitMobile ? 50 : 60;
+                    const inputTop = inst2Y + spacingAfterInstructions;
+                    this.mobileNameInput.style.top = inputTop + 'px';
+                    this.mobileNameInput.style.left = '50%';
+                    this.mobileNameInput.style.transform = 'translate(-50%, 0)'; // Align top edge, not center
+                    
                     // Try to auto-focus the input to trigger keyboard immediately
                     // iOS may block this, but we try multiple approaches
                     if (!this.nameInputAutoFocused) {
@@ -1854,7 +1962,7 @@ class Game {
                 for (const key in this.input.keys) {
                     if (this.input.keys[key]) {
                         keyPressed = true;
-                        if (key.length === 1 && key.match(/[a-zA-Z0-9]/) && this.nameInput.length < 10) {
+                        if (key.length === 1 && key.match(/[a-zA-Z0-9]/) && this.nameInput.length < 20) {
                             if (!this.input.keyProcessed) {
                                 this.nameInput += key.toUpperCase();
                                 this.input.keyProcessed = true;
@@ -1867,7 +1975,7 @@ class Game {
                         } else if (key === 'enter' || key === ' ') {
                             if (!this.input.keyProcessed) {
                                 if (this.nameInput.trim().length > 0) {
-                                    this.playerName = this.nameInput.trim().substring(0, 10); // Max 10 chars
+                                    this.playerName = this.nameInput.trim().substring(0, 20); // Max 20 chars
                                     this.state = 'start';
                                     this.nameInput = '';
                                     if (this.mobileNameInput) {
@@ -1908,6 +2016,47 @@ class Game {
         // Update snowflakes
         for (const flake of this.snowflakes) {
             flake.update(deltaTime);
+        }
+        
+        // Spawn snowballs every 8-15 seconds
+        this.snowballTimer += deltaTime;
+        if (this.snowballTimer >= this.nextSnowballTime) {
+            // Spawn a snowball at a random x position above the screen
+            const spawnX = this.camera.x + Math.random() * canvas.width;
+            const spawnY = this.camera.y - 50; // Start above screen
+            this.snowballs.push(new Snowball(spawnX, spawnY));
+            
+            // Reset timer and set next spawn time
+            this.snowballTimer = 0;
+            this.nextSnowballTime = 3000 + Math.random() * 2000; // 3-5 seconds
+        }
+        
+        // Update snowballs
+        for (let i = this.snowballs.length - 1; i >= 0; i--) {
+            const snowball = this.snowballs[i];
+            snowball.update(deltaTime);
+            
+            // Remove snowballs that fall off screen
+            if (snowball.y > this.camera.y + canvas.height + 100) {
+                this.snowballs.splice(i, 1);
+                continue;
+            }
+            
+            // Check collision with player
+            if (!this.player.isDead) {
+                const snowballBounds = snowball.getBounds();
+                const playerBounds = this.player.getBounds();
+                
+                if (playerBounds.x < snowballBounds.x + snowballBounds.width &&
+                    playerBounds.x + playerBounds.width > snowballBounds.x &&
+                    playerBounds.y < snowballBounds.y + snowballBounds.height &&
+                    playerBounds.y + playerBounds.height > snowballBounds.y) {
+                    // Player hit by snowball - lose a life
+                    this.loseLife();
+                    // Remove snowball after hit
+                    this.snowballs.splice(i, 1);
+                }
+            }
         }
         
         // Update particle system
@@ -1968,14 +2117,19 @@ class Game {
                     const distanceX = Math.abs(playerCenterX - chimneyCenterX);
                     const playerBottom = playerBounds.y + playerBounds.height;
                     
-                    // Player is on chimney if:
+                    // Player can only enter chimney from the TOP:
                     // - Horizontally aligned with chimney (within reasonable distance)
-                    // - Player bottom is at or near chimney top
-                    // - Player is falling or standing still
+                    // - Player bottom is at or near chimney top (from above only)
+                    // - Player is falling or standing still (not jumping upward)
+                    // - Player must be above chimney (not hitting from bottom)
+                    const playerTop = playerBounds.y;
+                    const chimneyTop = chimneyBounds.y;
+                    
                     if (distanceX < chimneyBounds.width / 2 + playerBounds.width / 2 &&
-                        playerBottom >= chimneyBounds.y - 5 &&
-                        playerBottom <= chimneyBounds.y + 15 &&
-                        this.player.velocityY >= -2) {
+                        playerBottom >= chimneyTop - 3 &&
+                        playerBottom <= chimneyTop + 12 &&
+                        this.player.velocityY >= -1 && // Allow slight upward movement but not full jump
+                        playerTop < chimneyTop + 10) { // Player must be mostly above chimney top
                         
                         // Player entered chimney
                         this.player.inHouse = true;
@@ -2037,13 +2191,20 @@ class Game {
                     // Calculate positions
                     const playerBottom = playerBounds.y + playerBounds.height;
                     const playerTop = playerBounds.y;
+                    const playerCenterY = playerBounds.y + playerBounds.height / 2;
                     const enemyTop = enemyBounds.y;
-                    const enemyCenter = enemyBounds.y + enemyBounds.height / 2;
-                    const stompThreshold = 15; // pixels from enemy top
+                    const enemyBottom = enemyBounds.y + enemyBounds.height;
+                    const enemyCenterY = enemyBounds.y + enemyBounds.height / 2;
+                    const stompThreshold = 25; // Increased threshold for more reliable stomping
                     
-                    // Check if player is stomping (falling down onto enemy from above)
-                    if (this.player.velocityY > 0 && playerBottom >= enemyTop && playerBottom <= enemyTop + stompThreshold) {
-                        // Stomp successful
+                    // PRIORITY 1: Check if player is stomping (falling down onto enemy from above)
+                    // More lenient: player must be falling (even slowly) and mostly above the enemy
+                    const isFalling = this.player.velocityY >= 0; // Falling or stationary (not jumping up)
+                    const isMostlyAbove = playerCenterY < enemyCenterY; // Player center is above enemy center
+                    const isCloseToTop = playerBottom >= enemyTop - 5 && playerBottom <= enemyTop + stompThreshold;
+                    
+                    if (isFalling && isMostlyAbove && isCloseToTop) {
+                        // Stomp successful - mark enemy as defeated and exit immediately
                         enemy.defeated = true;
                         this.player.velocityY = -5; // Bounce
                         this.score += 100;
@@ -2052,28 +2213,37 @@ class Game {
                         const enemyCenterX = enemyBounds.x + enemyBounds.width / 2;
                         const enemyCenterY = enemyBounds.y + enemyBounds.height / 2;
                         this.particleSystem.createEnemyDefeatParticles(enemyCenterX, enemyCenterY);
+                        
+                        // Exit immediately to prevent losing life
+                        continue; // Skip to next enemy
                     } 
-                    // Player is jumping upward - allow jumping over without penalty
-                    else if (this.player.velocityY < 0) {
+                    // PRIORITY 2: Player is jumping upward - allow jumping over without penalty
+                    else if (this.player.velocityY < -0.1) {
                         // Player is moving upward - allow to pass over enemy
                         // Only lose life if clearly hitting from below (player top below enemy bottom)
-                        if (playerTop > enemyBounds.y + enemyBounds.height - 5) {
+                        if (playerTop > enemyBottom - 5) {
                             // Hitting from below - lose life
                             this.loseLife();
                             return;
                         }
-                        // Otherwise, allow jumping over - no penalty
+                        // Otherwise, allow jumping over - no penalty, continue to next enemy
+                        continue;
                     }
-                    // Player is falling or stationary - lose life only on side/bottom contact
+                    // PRIORITY 3: Player is falling or stationary - lose life only on clear side/bottom contact
                     else {
-                        // Check if it's a side collision (not stomping)
-                        // Only lose life if player is clearly hitting from the side or bottom
-                        if (playerBottom > enemyTop + 5) {
-                            // Hitting from side or bottom - lose life
+                        // Only lose life if it's clearly a side or bottom collision
+                        // Check if player is hitting from the side (player center is at or below enemy center)
+                        // AND player bottom is significantly below enemy top (not a stomp attempt)
+                        const isSideOrBottomCollision = playerCenterY >= enemyCenterY && 
+                                                       playerBottom > enemyTop + 10;
+                        
+                        if (isSideOrBottomCollision) {
+                            // Clear side or bottom hit - lose life
                             this.loseLife();
                             return;
                         }
-                        // If player is very close to enemy top while falling, might be a near-miss - be lenient
+                        // If player is close to enemy top while falling, treat as near-miss stomp attempt
+                        // Don't lose life, just continue (player might bounce off or continue falling)
                     }
                 }
             }
@@ -2166,6 +2336,11 @@ class Game {
         // Draw snowflakes
         for (const flake of this.snowflakes) {
             flake.draw(ctx);
+        }
+        
+        // Draw snowballs
+        for (const snowball of this.snowballs) {
+            snowball.draw(ctx, this.camera);
         }
         
         // Draw houses
@@ -2334,25 +2509,57 @@ class Game {
         ctx.font = `bold ${scoreFontSize} Arial`;
         const scoreText = `Punkte: ${this.score}`;
         const livesText = `Leben: ${this.lives}`;
+        const playerNameText = this.playerName ? `Spieler: ${this.playerName}` : '';
         
-        // Draw semi-transparent background
-        const scoreBgHeight = isPortraitMobile ? 55 : 70;
+        // Calculate background height and width based on whether player name is shown
+        const hasPlayerName = this.playerName && this.playerName.length > 0;
+        const lineHeight = isPortraitMobile ? 25 : 30;
+        const topPadding = isPortraitMobile ? 12 : 15;
+        const bottomPadding = isPortraitMobile ? 15 : 18;
+        const leftPadding = 12;
+        const rightPadding = 15;
+        
+        // Calculate text positions first
+        const baseY = isPortraitMobile ? 30 : 38;
+        const scoreY = baseY;
+        const livesY = scoreY + lineHeight;
+        const nameY = livesY + lineHeight;
+        
+        // Calculate background box dimensions based on text positions
+        const lastTextY = hasPlayerName ? nameY : livesY;
+        const scoreBgHeight = lastTextY - baseY + bottomPadding + topPadding;
+        
+        // Calculate width needed for longest text (player name can be up to 20 chars)
+        const maxTextWidth = Math.max(
+            ctx.measureText(scoreText).width,
+            ctx.measureText(livesText).width,
+            hasPlayerName ? ctx.measureText(playerNameText).width : 0
+        );
+        const scoreBgWidth = Math.max(200, maxTextWidth + leftPadding + rightPadding);
+        
+        // Draw background box
         ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-        ctx.fillRect(5, 5, 200, scoreBgHeight);
+        ctx.fillRect(5, baseY - topPadding, scoreBgWidth, scoreBgHeight);
         
         // Draw text with outline for better visibility
         ctx.strokeStyle = '#000000';
         ctx.lineWidth = 3;
         ctx.fillStyle = '#FFFFFF';
         
-        const scoreY = isPortraitMobile ? 28 : 35;
-        const livesY = isPortraitMobile ? 48 : 65;
+        // Align all text to the same x position for consistent alignment
+        const textX = 5 + leftPadding;
         
-        ctx.strokeText(scoreText, 15, scoreY);
-        ctx.fillText(scoreText, 15, scoreY);
+        ctx.strokeText(scoreText, textX, scoreY);
+        ctx.fillText(scoreText, textX, scoreY);
         
-        ctx.strokeText(livesText, 15, livesY);
-        ctx.fillText(livesText, 15, livesY);
+        ctx.strokeText(livesText, textX, livesY);
+        ctx.fillText(livesText, textX, livesY);
+        
+        // Draw player name if available (aligned with other text)
+        if (hasPlayerName) {
+            ctx.strokeText(playerNameText, textX, nameY);
+            ctx.fillText(playerNameText, textX, nameY);
+        }
         
         // Reset line width
         ctx.lineWidth = 1;
@@ -2367,23 +2574,26 @@ class Game {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             
+            // Display game name at the top
             ctx.fillStyle = '#FFFFFF';
-            ctx.font = isPortraitMobile ? '24px Arial' : '36px Arial';
-            ctx.textAlign = 'center';
-            const titleY = isPortraitMobile ? centerY - 60 : canvas.height / 2 - 50;
-            ctx.fillText('GIB DEINEN NAMEN EIN', canvas.width / 2, titleY);
-            
             ctx.font = isPortraitMobile ? '22px Arial' : '32px Arial';
-            const displayName = this.nameInput || '_';
-            ctx.fillStyle = '#FFD700';
-            ctx.fillText(displayName, canvas.width / 2, centerY);
+            ctx.textAlign = 'center';
+            const gameNameY = isPortraitMobile ? centerY - 120 : canvas.height / 2 - 120;
+            ctx.fillText('KING KRAKES WEIHNACHTSRENNEN', canvas.width / 2, gameNameY);
             
             ctx.fillStyle = '#FFFFFF';
-            ctx.font = smallFontSize + ' Arial';
-            const inst1Y = isPortraitMobile ? centerY + 30 : canvas.height / 2 + 40;
+            ctx.font = isPortraitMobile ? '28px Arial' : '40px Arial';
+            const titleY = isPortraitMobile ? centerY - 80 : canvas.height / 2 - 70;
+            ctx.fillText('Wie heißt du?', canvas.width / 2, titleY);
+            
+            // Don't display name on canvas - it's shown in the HTML input field on mobile
+            // Only show instructions
+            ctx.fillStyle = '#FFFFFF';
+            ctx.font = isPortraitMobile ? '16px Arial' : '20px Arial';
+            const inst1Y = isPortraitMobile ? centerY + 20 : canvas.height / 2 + 30;
             const inst2Y = isPortraitMobile ? centerY + 50 : canvas.height / 2 + 65;
             ctx.fillText('Tippe deinen Namen und drücke ENTER', canvas.width / 2, inst1Y);
-            ctx.fillText('(Max. 10 Zeichen)', canvas.width / 2, inst2Y);
+            ctx.fillText('(Max. 20 Zeichen)', canvas.width / 2, inst2Y);
             ctx.textAlign = 'left';
         } else if (this.state === 'start') {
             ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
@@ -2393,7 +2603,7 @@ class Game {
             ctx.font = titleFontSize + ' Arial';
             ctx.textAlign = 'center';
             const titleY = isPortraitMobile ? centerY - 50 : canvas.height / 2 - 80;
-            ctx.fillText('EMMAS SCHNEE-RENNEN', canvas.width / 2, titleY);
+            ctx.fillText('KING KRAKES WEIHNACHTSRENNEN', canvas.width / 2, titleY);
             
             if (this.playerName) {
                 ctx.font = subtitleFontSize + ' Arial';

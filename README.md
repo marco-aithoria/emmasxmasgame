@@ -1,4 +1,4 @@
-# Emmas Schnee-Rennen
+# King Krakes Weihnachtsrennen
 
 Ein HTML5 Canvas Side-Scrolling Jump-and-Run Plattformspiel mit Winter-Thema, ähnlich wie Super Mario.
 
