@@ -1,4 +1,4 @@
-# Winter-Plattformer - Santas Abenteuer
+# Emmas Schnee-Rennen
 
 Ein HTML5 Canvas Side-Scrolling Jump-and-Run Plattformspiel mit Winter-Thema, ähnlich wie Super Mario.
 

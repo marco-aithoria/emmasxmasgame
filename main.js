@@ -2393,7 +2393,7 @@ class Game {
             ctx.font = titleFontSize + ' Arial';
             ctx.textAlign = 'center';
             const titleY = isPortraitMobile ? centerY - 50 : canvas.height / 2 - 80;
-            ctx.fillText('SANTA\'S WINTER ABENTEUER', canvas.width / 2, titleY);
+            ctx.fillText('EMMAS SCHNEE-RENNEN', canvas.width / 2, titleY);
             
             if (this.playerName) {
                 ctx.font = subtitleFontSize + ' Arial';
